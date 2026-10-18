@@ -73,19 +73,40 @@ The encoder is a small three-stage convolutional network trained from scratch. I
 
 Use the included three-stage compact CNN with 64-channel features, QR response
 rank 32 and the deterministic color/contrast/blur/8-degree rotation bank on
-128-by-128 RGB images. These controlled transformations define the response
-setting; object masks, a pretrained backbone and external DG implementations are
-not required. Fix the same shared class vocabulary across source/target domains.
+128-by-128 RGB inputs. The public input setting is CIFAR-10 with three fixed
+source appearance domains (clean, warm channel balance, low contrast) and a
+held-out cold/blur domain. Domain transforms do not read labels.
+
+```bash
+python -m pip install -e .
+python prepare_cifar.py --plan
+python prepare_cifar.py --output data/cifar-domains --seed 7
+responsedg train --manifest data/cifar-domains/manifest.csv --target-domain 3 --output runs/full --variant full --epochs 30 --rank 32 --batch-size 32 --seed 7 --lr 0.001 --gate-threshold 0.1 --response-weight 1 --signature-weight 0.1
+responsedg evaluate --manifest data/cifar-domains/manifest.csv --checkpoint runs/full/model.pt --output runs/full/evaluation --batch-size 32
+```
+
+Acquisition uses the [fast.ai public PNG mirror](https://registry.opendata.aws/fast-ai-imageclas/)
+of [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html). The archive is read
+without extracting its paths or loading pickles. For a local copy use
+`python prepare_cifar.py --offline --archive data/cifar10.tgz`.
+The default subset contains 200 source-training and 50 source-validation
+originals per class, each rendered in all three source domains, and 100 official
+test originals per class rendered only in target domain 3. This gives
+6,000/1,500/1,000 train/val/test rows. The role is assigned to each original
+before making source-domain copies, so those copies cannot cross train and val.
+Native images remain 32px; the existing loader resizes inputs to 128px.
+`manifest.json` records the source, domains, counts and seed; `image_id` and
+`original_split` in the CSV retain the grouping and source roles. Only source
+validation selects the checkpoint. Cite Krizhevsky's 2009 CIFAR report when
+using the data and retain the dataset's original attribution.
+
+For custom domain folders, the existing adapter remains available:
 
 ```bash
 python prepare.py --root data/domains --target heldout --output data/manifest.csv --seed 7
-responsedg train --manifest data/manifest.csv --target-domain 0 --output runs/full --variant full --epochs 30 --rank 32 --batch-size 32 --seed 7 --lr 0.001 --gate-threshold 0.1 --response-weight 1 --signature-weight 0.1
-responsedg evaluate --manifest data/manifest.csv --checkpoint runs/full/model.pt --output runs/full/evaluation --batch-size 32
 ```
 
-Replace `--target-domain 0` with the `target_domain` recorded by prepare in
-`data/manifest.json`; IDs follow sorted directory names. Directory layout is
-`data/domains/domain/class/image`. Source-only validation selects the checkpoint;
-the target domain is evaluated afterwards. Optional context_path/pair_path and
-pair_label enable additional interventions and are not training inputs. Real
-labeled domain images are the standard required run input.
+Use its recorded `target_domain` in training. Directory layout is
+`data/domains/domain/class/image`. Optional context_path/pair_path and pair_label
+support additional annotated interventions. The public setting's classification,
+response and calibration endpoints run without those optional pairs.

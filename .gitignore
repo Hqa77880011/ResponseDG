@@ -15,3 +15,5 @@ outputs/
 .env
 .env.*
 *.pdf
+
+runs/
