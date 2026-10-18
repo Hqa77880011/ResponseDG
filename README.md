@@ -68,3 +68,24 @@ Context-swap accuracy drop and counterfactual prediction consistency are compute
 ## Implementation choices
 
 The encoder is a small three-stage convolutional network trained from scratch. It keeps the response mechanism inspectable and avoids pretrained-model downloads. The intervention bank uses color, contrast, blur, and geometry; object-mask foreground/background interventions can be supplied as evaluation pairs. Spatial correspondence is mean cosine similarity of local encoder features. Orthogonality is exact up to QR numerical precision, with nuisance response equal to the residual complement. The source-validation probes describe response information in the trained representation; they are separate from target-domain model selection.
+
+## Selected reproducible setting
+
+Use the included three-stage compact CNN with 64-channel features, QR response
+rank 32 and the deterministic color/contrast/blur/8-degree rotation bank on
+128-by-128 RGB images. These controlled transformations define the response
+setting; object masks, a pretrained backbone and external DG implementations are
+not required. Fix the same shared class vocabulary across source/target domains.
+
+```bash
+python prepare.py --root data/domains --target heldout --output data/manifest.csv --seed 7
+responsedg train --manifest data/manifest.csv --target-domain 0 --output runs/full --variant full --epochs 30 --rank 32 --batch-size 32 --seed 7 --lr 0.001 --gate-threshold 0.1 --response-weight 1 --signature-weight 0.1
+responsedg evaluate --manifest data/manifest.csv --checkpoint runs/full/model.pt --output runs/full/evaluation --batch-size 32
+```
+
+Replace `--target-domain 0` with the `target_domain` recorded by prepare in
+`data/manifest.json`; IDs follow sorted directory names. Directory layout is
+`data/domains/domain/class/image`. Source-only validation selects the checkpoint;
+the target domain is evaluated afterwards. Optional context_path/pair_path and
+pair_label enable additional interventions and are not training inputs. Real
+labeled domain images are the standard required run input.
